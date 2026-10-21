@@ -11,7 +11,12 @@ import { buildForecast } from "@/utils/forecasting";
 import type { ForecastSettings } from "@/types/forecasting";
 
 export function useForecastData() {
-  const { ingredients } = useInventoryData();
+  const {
+    ingredients,
+    loading: inventoryLoading,
+    error: inventoryError,
+    refresh: refreshInventory,
+  } = useInventoryData();
 
   const [settings, setSettings] = useState<ForecastSettings>(
     DEFAULT_FORECAST_SETTINGS,
@@ -38,6 +43,9 @@ export function useForecastData() {
     settings,
     setSettings,
     referenceDate,
+    inventoryLoading,
+    inventoryError,
+    refreshInventory,
     ...result,
   };
 }

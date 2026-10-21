@@ -1,16 +1,26 @@
 import { useState } from "react";
+import type { FormEvent } from "react";
+
 import dayjs from "dayjs";
-import { X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { useInventoryStore } from "@/store/inventoryStore";
 import type { Ingredient } from "@/types/dashboard";
+
 import type { StockAdjustmentInput } from "@/types/inventory";
+
+import type { StockAdjustmentPayload } from "@/types/api";
+
 import { formatQuantity } from "@/utils/dashboard";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 interface StockDialogProps {
   ingredient: Ingredient;
   onClose: () => void;
+  onSubmit: (
+    ingredientId: string,
+    payload: StockAdjustmentPayload,
+  ) => Promise<unknown>;
 }
 
 const OPTIONS: {
@@ -24,9 +34,7 @@ const OPTIONS: {
   { value: "adjust-out", label: "Negative Correction" },
 ];
 
-function StockDialog({ ingredient, onClose }: StockDialogProps) {
-  const adjustStock = useInventoryStore((state) => state.adjustStock);
-
+function StockDialog({ ingredient, onClose, onSubmit }: StockDialogProps) {
   const [type, setType] = useState<StockAdjustmentInput["type"]>("receive");
 
   const [quantity, setQuantity] = useState("");
@@ -37,10 +45,11 @@ function StockDialog({ ingredient, onClose }: StockDialogProps) {
   );
 
   const [hasExpiry, setHasExpiry] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const isIncoming = type === "receive" || type === "adjust-in";
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const parsedQuantity = Number(quantity);
@@ -50,21 +59,36 @@ function StockDialog({ ingredient, onClose }: StockDialogProps) {
       return;
     }
 
-    const error = adjustStock({
-      ingredientId: ingredient.id,
-      type,
-      quantity: parsedQuantity,
-      expiryDate: isIncoming && hasExpiry ? expiryDate : null,
-      note: note.trim(),
-    });
-
-    if (error) {
-      toast.error(error);
+    if (ingredient.unit === "pcs" && !Number.isInteger(parsedQuantity)) {
+      toast.error("Piece quantities must be whole numbers.");
       return;
     }
 
-    toast.success("Stock updated successfully.");
-    onClose();
+    const payload: StockAdjustmentPayload = isIncoming
+      ? {
+          type,
+          quantity: parsedQuantity,
+          expiryDate: hasExpiry ? expiryDate : null,
+          note: note.trim(),
+        }
+      : {
+          type,
+          quantity: parsedQuantity,
+          note: note.trim(),
+        };
+
+    try {
+      setSaving(true);
+
+      await onSubmit(ingredient.id, payload);
+
+      toast.success("Stock updated successfully.");
+      onClose();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -73,7 +97,7 @@ function StockDialog({ ingredient, onClose }: StockDialogProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="stock-dialog-title"
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
       >
         <div className="mb-5 flex items-start justify-between">
           <div>
@@ -91,16 +115,17 @@ function StockDialog({ ingredient, onClose }: StockDialogProps) {
 
           <button
             type="button"
+            disabled={saving}
             onClick={onClose}
             aria-label="Close dialog"
-            className="cursor-pointer rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+            className="cursor-pointer rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
           >
             <X className="size-5" />
           </button>
         </div>
 
         <div className="mb-5 rounded-xl bg-emerald-50 p-4">
-          <p className="text-xs text-emerald-700">Current Stock</p>
+          <p className="text-xs text-emerald-700">Current Recorded Stock</p>
 
           <p className="mt-1 text-2xl font-semibold text-emerald-800">
             {formatQuantity(ingredient.stock)}{" "}
@@ -113,6 +138,7 @@ function StockDialog({ ingredient, onClose }: StockDialogProps) {
             <span>Movement Type</span>
 
             <select
+              disabled={saving}
               value={type}
               onChange={(event) =>
                 setType(event.target.value as StockAdjustmentInput["type"])
@@ -131,10 +157,11 @@ function StockDialog({ ingredient, onClose }: StockDialogProps) {
             <span>Quantity ({ingredient.unit})</span>
 
             <input
+              required
+              disabled={saving}
               type="number"
               min={ingredient.unit === "pcs" ? "1" : "0.001"}
               step={ingredient.unit === "pcs" ? "1" : "0.001"}
-              required
               value={quantity}
               onChange={(event) => setQuantity(event.target.value)}
               placeholder="0"
@@ -148,6 +175,7 @@ function StockDialog({ ingredient, onClose }: StockDialogProps) {
                 <input
                   type="checkbox"
                   checked={hasExpiry}
+                  disabled={saving}
                   onChange={(event) => setHasExpiry(event.target.checked)}
                   className="accent-emerald-700"
                 />
@@ -157,9 +185,11 @@ function StockDialog({ ingredient, onClose }: StockDialogProps) {
               {hasExpiry && (
                 <label className="block space-y-1.5 text-sm text-slate-700">
                   <span>Expiry Date</span>
+
                   <input
-                    type="date"
                     required
+                    disabled={saving}
+                    type="date"
                     min={dayjs().format("YYYY-MM-DD")}
                     value={expiryDate}
                     onChange={(event) => setExpiryDate(event.target.value)}
@@ -175,6 +205,8 @@ function StockDialog({ ingredient, onClose }: StockDialogProps) {
 
             <textarea
               rows={3}
+              maxLength={500}
+              disabled={saving}
               value={note}
               onChange={(event) => setNote(event.target.value)}
               placeholder="e.g. Weekly supplier delivery"
@@ -184,24 +216,30 @@ function StockDialog({ ingredient, onClose }: StockDialogProps) {
 
           {!isIncoming && (
             <p className="text-xs text-slate-500">
-              Outgoing stock is deducted from the batches expiring soonest.
+              The backend automatically deducts stock from the earliest-expiring
+              eligible batches. Expired stock cannot be used for kitchen
+              consumption.
             </p>
           )}
 
           <div className="flex justify-end gap-3 pt-3">
             <button
               type="button"
+              disabled={saving}
               onClick={onClose}
-              className="cursor-pointer rounded-lg border border-slate-200 px-4 py-2.5 text-sm"
+              className="cursor-pointer rounded-lg border border-slate-200 px-4 py-2.5 text-sm disabled:opacity-50"
             >
               Cancel
             </button>
 
             <button
               type="submit"
-              className="cursor-pointer rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-800"
+              disabled={saving}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-60"
             >
-              Confirm Movement
+              {saving && <Loader2 className="size-4 animate-spin" />}
+
+              {saving ? "Updating..." : "Confirm Movement"}
             </button>
           </div>
         </form>

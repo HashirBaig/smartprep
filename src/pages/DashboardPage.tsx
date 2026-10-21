@@ -1,7 +1,17 @@
 import { useMemo, useState } from "react";
 import dayjs from "dayjs";
 
-import { AlertTriangle, BarChart3, Boxes, Clock3 } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  BarChart3,
+  Boxes,
+  Clock3,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
+
+import { toast } from "sonner";
 
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import StatCard from "@/components/dashboard/StatCard";
@@ -15,6 +25,7 @@ import { mockDashboard } from "@/data/mockDashboard";
 import { EXPIRY_WARNING_DAYS } from "@/constants/dashboard";
 
 import { useForecastData } from "@/hooks/useForecastData";
+import { getApiErrorMessage } from "@/utils/apiError";
 
 import type {
   IngredientForecast,
@@ -22,13 +33,21 @@ import type {
 } from "@/types/dashboard";
 
 function DashboardPage() {
-  const { ingredients, ingredientDemands, totalForecastPortions } =
-    useForecastData();
+  const {
+    ingredients,
+    ingredientDemands,
+    totalForecastPortions,
+    inventoryLoading,
+    inventoryError,
+    refreshInventory,
+  } = useForecastData();
 
   const { insights } = mockDashboard;
 
   const [search, setSearch] = useState("");
   const [selectedForecastId, setSelectedForecastId] = useState("");
+
+  const [retrying, setRetrying] = useState(false);
 
   // Filter inventory by ingredient name or category.
   const filteredIngredients = useMemo(() => {
@@ -43,7 +62,7 @@ function DashboardPage() {
     );
   }, [ingredients, search]);
 
-  // Calculate dashboard statistics.
+  // Calculate dashboard statistics using MongoDB inventory.
   const lowStockCount = useMemo(
     () =>
       ingredients.filter(
@@ -62,13 +81,12 @@ function DashboardPage() {
     [ingredients],
   );
 
-  // Convert ingredient demand into the format
-  // expected by the existing DemandForecast component.
+  // Convert the ingredient demand into chart-compatible data.
   const forecasts: IngredientForecast[] = useMemo(
     () =>
       ingredientDemands.map((demand) => ({
         ingredientId: demand.ingredientId,
-        changePercent: 0, // Placeholder: not calculated yet.
+        changePercent: 0,
         dailyDemand: demand.dailyDemand.map((day) => ({
           day: dayjs(day.date).format("ddd"),
           quantity: day.quantity,
@@ -77,14 +95,14 @@ function DashboardPage() {
     [ingredientDemands],
   );
 
-  // Ensure a valid selection without updating state in an effect.
+  // Derive valid selection instead of setting state in an effect.
   const activeForecastId = forecasts.some(
     (forecast) => forecast.ingredientId === selectedForecastId,
   )
     ? selectedForecastId
     : (forecasts[0]?.ingredientId ?? "");
 
-  // Adapt forecasting results for the existing PurchasePlan.
+  // Convert forecast requirements into PurchasePlan props.
   const recommendations: PurchaseRecommendation[] = useMemo(() => {
     const ingredientMap = new Map(
       ingredients.map((ingredient) => [ingredient.id, ingredient]),
@@ -106,6 +124,66 @@ function DashboardPage() {
       ];
     });
   }, [ingredients, ingredientDemands]);
+
+  async function handleRetry() {
+    try {
+      setRetrying(true);
+      await refreshInventory();
+      toast.success("Dashboard data refreshed.");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  // Initial API loading state.
+  if (inventoryLoading) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <Loader2 className="size-7 animate-spin text-emerald-700" />
+
+        <p className="text-sm text-slate-500">Loading restaurant data...</p>
+      </div>
+    );
+  }
+
+  // API error state with retry.
+  if (inventoryError) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center">
+        <div
+          role="alert"
+          className="w-full max-w-md rounded-2xl border border-red-100 bg-white p-7 text-center shadow-sm"
+        >
+          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-red-50">
+            <AlertCircle className="size-6 text-red-600" />
+          </div>
+
+          <h2 className="text-lg font-semibold text-slate-900">
+            Unable to load dashboard
+          </h2>
+
+          <p className="mt-2 text-sm text-slate-500">{inventoryError}</p>
+
+          <button
+            type="button"
+            disabled={retrying}
+            onClick={() => void handleRetry()}
+            className="mx-auto mt-5 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
+          >
+            {retrying ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="size-4" />
+            )}
+
+            {retrying ? "Retrying..." : "Try Again"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-400 space-y-6">
@@ -170,8 +248,14 @@ function DashboardPage() {
         </div>
       </div>
 
+      <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
+        Purchase recommendations are based on recorded stock, not
+        expiry-adjusted usable stock. Verify expiring batches before placing
+        orders.
+      </div>
+
       <footer className="pt-4 text-center text-xs text-slate-400">
-        SmartPrep · Restaurant Intelligence · Demo Data
+        SmartPrep · MongoDB Inventory · Synthetic Forecasting
       </footer>
     </div>
   );

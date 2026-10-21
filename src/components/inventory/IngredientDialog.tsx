@@ -1,24 +1,30 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import type { FormEvent } from "react";
+
+import { Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { INGREDIENT_CATEGORIES, INGREDIENT_UNITS } from "@/constants/inventory";
 
-import { useInventoryStore } from "@/store/inventoryStore";
-
 import type { IngredientCategory, IngredientUnit } from "@/types/dashboard";
+
 import type { IngredientInput, InventoryItem } from "@/types/inventory";
+
+import { getApiErrorMessage } from "@/utils/apiError";
 
 interface IngredientDialogProps {
   ingredient?: InventoryItem | null;
   onClose: () => void;
+  onSubmit: (payload: IngredientInput) => Promise<unknown>;
 }
 
-function IngredientDialog({ ingredient, onClose }: IngredientDialogProps) {
-  const addIngredient = useInventoryStore((state) => state.addIngredient);
-  const updateIngredient = useInventoryStore((state) => state.updateIngredient);
-
+function IngredientDialog({
+  ingredient,
+  onClose,
+  onSubmit,
+}: IngredientDialogProps) {
   const [name, setName] = useState(ingredient?.name ?? "");
+
   const [emoji, setEmoji] = useState(ingredient?.emoji ?? "🥬");
 
   const [category, setCategory] = useState<IngredientCategory>(
@@ -35,7 +41,9 @@ function IngredientDialog({ ingredient, onClose }: IngredientDialogProps) {
     ingredient?.minimumStock.toString() ?? "0",
   );
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const parsedCost = Number(unitCost);
@@ -61,15 +69,6 @@ function IngredientDialog({ ingredient, onClose }: IngredientDialogProps) {
       return;
     }
 
-    // Existing batches use the old unit. We deliberately
-    // prevent changing units once stock exists.
-    if (ingredient && ingredient.unit !== unit) {
-      toast.error(
-        "Changing an existing ingredient's unit is not supported yet.",
-      );
-      return;
-    }
-
     const payload: IngredientInput = {
       name: name.trim(),
       emoji: emoji.trim() || "📦",
@@ -79,27 +78,32 @@ function IngredientDialog({ ingredient, onClose }: IngredientDialogProps) {
       minimumStock: parsedMinimum,
     };
 
-    if (ingredient) {
-      updateIngredient(ingredient.id, payload);
-      toast.success("Ingredient updated.");
-    } else {
-      addIngredient(payload);
-      toast.success("Ingredient created.");
-    }
+    try {
+      setSaving(true);
 
-    onClose();
+      await onSubmit(payload);
+
+      toast.success(
+        ingredient
+          ? "Ingredient updated successfully."
+          : "Ingredient created successfully.",
+      );
+
+      onClose();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div
-      role="presentation"
-      className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/50 p-4"
-    >
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/50 p-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="ingredient-dialog-title"
-        className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
       >
         <div className="mb-6 flex items-start justify-between">
           <div>
@@ -111,15 +115,16 @@ function IngredientDialog({ ingredient, onClose }: IngredientDialogProps) {
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              Manage the details of your ingredient.
+              Manage your ingredient details.
             </p>
           </div>
 
           <button
             type="button"
+            disabled={saving}
             onClick={onClose}
             aria-label="Close dialog"
-            className="cursor-pointer rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+            className="cursor-pointer rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
           >
             <X className="size-5" />
           </button>
@@ -129,9 +134,11 @@ function IngredientDialog({ ingredient, onClose }: IngredientDialogProps) {
           <div className="grid grid-cols-[1fr_80px] gap-3">
             <label className="space-y-1.5 text-sm text-slate-700">
               <span>Ingredient Name</span>
+
               <input
                 autoFocus
                 required
+                disabled={saving}
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="e.g. Chicken Breast"
@@ -141,7 +148,9 @@ function IngredientDialog({ ingredient, onClose }: IngredientDialogProps) {
 
             <label className="space-y-1.5 text-sm text-slate-700">
               <span>Icon</span>
+
               <input
+                disabled={saving}
                 value={emoji}
                 onChange={(event) => setEmoji(event.target.value)}
                 className="h-11 w-full rounded-lg border border-slate-200 px-3 text-center text-xl outline-none"
@@ -151,7 +160,9 @@ function IngredientDialog({ ingredient, onClose }: IngredientDialogProps) {
 
           <label className="block space-y-1.5 text-sm text-slate-700">
             <span>Category</span>
+
             <select
+              disabled={saving}
               value={category}
               onChange={(event) =>
                 setCategory(event.target.value as IngredientCategory)
@@ -159,7 +170,9 @@ function IngredientDialog({ ingredient, onClose }: IngredientDialogProps) {
               className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none"
             >
               {INGREDIENT_CATEGORIES.map((item) => (
-                <option key={item}>{item}</option>
+                <option key={item} value={item}>
+                  {item}
+                </option>
               ))}
             </select>
           </label>
@@ -167,27 +180,32 @@ function IngredientDialog({ ingredient, onClose }: IngredientDialogProps) {
           <div className="grid grid-cols-2 gap-3">
             <label className="space-y-1.5 text-sm text-slate-700">
               <span>Unit</span>
+
               <select
                 value={unit}
-                disabled={Boolean(ingredient)}
+                disabled={saving || Boolean(ingredient)}
                 onChange={(event) =>
                   setUnit(event.target.value as IngredientUnit)
                 }
-                className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none disabled:bg-slate-50"
               >
                 {INGREDIENT_UNITS.map((item) => (
-                  <option key={item}>{item}</option>
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
                 ))}
               </select>
             </label>
 
             <label className="space-y-1.5 text-sm text-slate-700">
               <span>Unit Cost (€)</span>
+
               <input
+                required
+                disabled={saving}
                 type="number"
                 min="0"
                 step="0.01"
-                required
                 value={unitCost}
                 onChange={(event) => setUnitCost(event.target.value)}
                 className="h-11 w-full rounded-lg border border-slate-200 px-3 outline-none"
@@ -197,11 +215,13 @@ function IngredientDialog({ ingredient, onClose }: IngredientDialogProps) {
 
           <label className="block space-y-1.5 text-sm text-slate-700">
             <span>Minimum Stock Threshold</span>
+
             <input
+              required
+              disabled={saving}
               type="number"
               min="0"
               step={unit === "pcs" ? "1" : "0.1"}
-              required
               value={minimumStock}
               onChange={(event) => setMinimumStock(event.target.value)}
               className="h-11 w-full rounded-lg border border-slate-200 px-3 outline-none"
@@ -210,25 +230,33 @@ function IngredientDialog({ ingredient, onClose }: IngredientDialogProps) {
 
           {!ingredient && (
             <p className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800">
-              New ingredients start with zero stock. Use "Adjust Stock" to
-              record the first delivery.
+              New ingredients start with zero stock. Record a delivery afterward
+              to add quantities.
             </p>
           )}
 
           <div className="flex justify-end gap-3 pt-3">
             <button
               type="button"
+              disabled={saving}
               onClick={onClose}
-              className="cursor-pointer rounded-lg border border-slate-200 px-4 py-2.5 text-sm text-slate-700"
+              className="cursor-pointer rounded-lg border border-slate-200 px-4 py-2.5 text-sm text-slate-700 disabled:opacity-50"
             >
               Cancel
             </button>
 
             <button
               type="submit"
-              className="cursor-pointer rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-800"
+              disabled={saving}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {ingredient ? "Save Changes" : "Create Ingredient"}
+              {saving && <Loader2 className="size-4 animate-spin" />}
+
+              {saving
+                ? "Saving..."
+                : ingredient
+                  ? "Save Changes"
+                  : "Create Ingredient"}
             </button>
           </div>
         </form>

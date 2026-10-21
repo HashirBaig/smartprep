@@ -1,15 +1,19 @@
-import { Plus, Search } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Search } from "lucide-react";
 
 interface InventoryHeaderProps {
   search: string;
   onSearchChange: (value: string) => void;
   onAddIngredient: () => void;
+  onRefresh: () => void;
+  refreshing: boolean;
 }
 
 function InventoryHeader({
   search,
   onSearchChange,
   onAddIngredient,
+  onRefresh,
+  refreshing,
 }: InventoryHeaderProps) {
   return (
     <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
@@ -41,6 +45,22 @@ function InventoryHeader({
             className="h-11 w-full rounded-xl border border-slate-200 bg-white pr-4 pl-10 text-sm outline-none focus:border-emerald-500 sm:w-64"
           />
         </div>
+
+        <button
+          type="button"
+          title="Refresh inventory"
+          aria-label="Refresh inventory"
+          disabled={refreshing}
+          onClick={onRefresh}
+          className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {refreshing ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <RefreshCw className="size-4" />
+          )}
+          Refresh
+        </button>
 
         <button
           type="button"

@@ -1,17 +1,23 @@
 import dayjs from "dayjs";
+
 import { ArrowDownLeft, ArrowUpRight, History } from "lucide-react";
 
-import type { StockMovement, InventoryItem } from "@/types/inventory";
+import type { ApiStockMovement } from "@/types/api";
+
+import type { InventoryItem } from "@/types/inventory";
 
 import { MOVEMENT_LABELS } from "@/constants/inventory";
+
 import { formatQuantity } from "@/utils/dashboard";
 
 interface MovementHistoryProps {
-  movements: StockMovement[];
+  movements: ApiStockMovement[];
   ingredients: InventoryItem[];
 }
 
 function MovementHistory({ movements, ingredients }: MovementHistoryProps) {
+  const ingredientMap = new Map(ingredients.map((item) => [item.id, item]));
+
   const latestMovements = [...movements]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 10);
@@ -20,11 +26,12 @@ function MovementHistory({ movements, ingredients }: MovementHistoryProps) {
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center gap-2">
         <History className="size-5 text-emerald-700" />
+
         <h2 className="font-semibold text-slate-900">Recent Stock Movements</h2>
       </div>
 
       <p className="mt-2 text-xs text-slate-500">
-        Latest inventory transactions.
+        Latest stock transactions recorded in MongoDB.
       </p>
 
       <div className="mt-5 divide-y divide-slate-100">
@@ -34,11 +41,10 @@ function MovementHistory({ movements, ingredients }: MovementHistoryProps) {
           </p>
         ) : (
           latestMovements.map((movement) => {
-            const ingredient = ingredients.find(
-              (item) => item.id === movement.ingredientId,
-            );
+            const ingredient = ingredientMap.get(movement.ingredientId);
 
             const incoming = movement.quantity > 0;
+
             const Icon = incoming ? ArrowDownLeft : ArrowUpRight;
 
             return (
@@ -66,6 +72,12 @@ function MovementHistory({ movements, ingredients }: MovementHistoryProps) {
                       {MOVEMENT_LABELS[movement.type]}
                       {movement.note ? ` · ${movement.note}` : ""}
                     </p>
+
+                    {movement.purchaseOrderId && (
+                      <p className="mt-1 text-xs text-emerald-700">
+                        Purchase order receipt
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -76,7 +88,7 @@ function MovementHistory({ movements, ingredients }: MovementHistoryProps) {
                     }`}
                   >
                     {incoming ? "+" : ""}
-                    {formatQuantity(movement.quantity)} {ingredient?.unit}
+                    {formatQuantity(movement.quantity)} {ingredient?.unit ?? ""}
                   </p>
 
                   <p className="mt-1 text-xs text-slate-400">

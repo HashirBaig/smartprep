@@ -1,18 +1,23 @@
 import dayjs from "dayjs";
+
 import { CalendarClock } from "lucide-react";
 
-import type { StockBatch, InventoryItem } from "@/types/inventory";
+import type { ApiStockBatch } from "@/types/api";
+
+import type { InventoryItem } from "@/types/inventory";
 
 import { getBatchStatus, getExpiryLabel } from "@/utils/inventory";
 
 import { formatQuantity } from "@/utils/dashboard";
 
 interface ExpiryPanelProps {
-  batches: StockBatch[];
+  batches: ApiStockBatch[];
   ingredients: InventoryItem[];
 }
 
 function ExpiryPanel({ batches, ingredients }: ExpiryPanelProps) {
+  const ingredientMap = new Map(ingredients.map((item) => [item.id, item]));
+
   const relevantBatches = batches
     .filter(
       (batch) =>
@@ -26,11 +31,12 @@ function ExpiryPanel({ batches, ingredients }: ExpiryPanelProps) {
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center gap-2">
         <CalendarClock className="size-5 text-amber-600" />
+
         <h2 className="font-semibold text-slate-900">Expiry Tracking</h2>
       </div>
 
       <p className="mt-2 text-xs text-slate-500">
-        Batches expiring within 7 days, including expired stock.
+        MongoDB batches approaching expiration.
       </p>
 
       <div className="mt-5 divide-y divide-slate-100">
@@ -40,9 +46,7 @@ function ExpiryPanel({ batches, ingredients }: ExpiryPanelProps) {
           </p>
         ) : (
           relevantBatches.map((batch) => {
-            const ingredient = ingredients.find(
-              (item) => item.id === batch.ingredientId,
-            );
+            const ingredient = ingredientMap.get(batch.ingredientId);
 
             const status = getBatchStatus(batch.expiryDate);
 
@@ -52,9 +56,9 @@ function ExpiryPanel({ batches, ingredients }: ExpiryPanelProps) {
                 className="flex items-center justify-between gap-3 py-3"
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-xl">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-xl">
                     {ingredient?.emoji ?? "📦"}
-                  </div>
+                  </span>
 
                   <div>
                     <p className="text-sm font-medium text-slate-800">
@@ -62,10 +66,14 @@ function ExpiryPanel({ batches, ingredients }: ExpiryPanelProps) {
                     </p>
 
                     <p className="text-xs text-slate-500">
-                      {formatQuantity(batch.quantity)} {ingredient?.unit} ·{" "}
+                      {formatQuantity(batch.quantity)} {ingredient?.unit ?? ""}
+                    </p>
+
+                    <p className="mt-1 text-xs text-slate-400">
+                      Expiry:{" "}
                       {batch.expiryDate
                         ? dayjs(batch.expiryDate).format("DD MMM YYYY")
-                        : ""}
+                        : "N/A"}
                     </p>
                   </div>
                 </div>
