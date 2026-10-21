@@ -2,29 +2,53 @@ import axios from "axios";
 import config from "@/config/environment";
 
 const api = axios.create({
-  baseURL: `${config?.API_URL}`,
+  baseURL: config.API_URL,
+  timeout: 15000,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-api.interceptors.request.use((config) => {
-  // Attach auth token, if present
-  const authRaw = localStorage.getItem("auth-storage");
-  const token = authRaw ? JSON.parse(authRaw)?.state?.token : null;
-  if (token) {
-    config.headers.set("Authorization", `Bearer ${token}`);
-  }
+interface AuthStorage {
+  state?: {
+    token?: string;
+  };
+}
 
-  // Attach guest user id, if present
-  const guestRaw = localStorage.getItem("guest-user-storage");
-  const guestUserId = guestRaw ? JSON.parse(guestRaw)?.state?.userId : null;
+interface GuestStorage {
+  state?: {
+    userId?: string;
+  };
+}
+
+function getStoredValue<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+
+    if (!raw) return null;
+
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+api.interceptors.request.use((requestConfig) => {
+  const auth = getStoredValue<AuthStorage>("auth-storage");
+  const guest = getStoredValue<GuestStorage>("guest-user-storage");
+
+  const token = auth?.state?.token;
+  const guestUserId = guest?.state?.userId;
+
+  if (token) {
+    requestConfig.headers.set("Authorization", `Bearer ${token}`);
+  }
 
   if (guestUserId) {
-    config.headers.set("X-Guest-Id", guestUserId);
+    requestConfig.headers.set("X-Guest-Id", guestUserId);
   }
 
-  return config;
+  return requestConfig;
 });
 
 export default api;
