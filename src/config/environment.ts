@@ -3,7 +3,7 @@ const dev = {
 };
 
 const prod = {
-  API_URL: "https://smartprep-nodets.vercel.app/api",
+  API_URL: "https://slimprep-core.vercel.app/api",
 };
 
 const config = import.meta.env.MODE === "production" ? prod : dev;
