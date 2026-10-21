@@ -6,6 +6,7 @@ import AppSidebar from "@/components/AppSidebar";
 import DashboardPage from "@/pages/DashboardPage";
 import InventoryPage from "@/pages/InventoryPage";
 import ForecastPage from "@/pages/ForecastPage";
+import PurchasePlanningPage from "@/pages/PurchasePlanningPage";
 
 import "./App.css";
 
@@ -19,6 +20,7 @@ function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/inventory" element={<InventoryPage />} />
           <Route path="/forecasts" element={<ForecastPage />} />
+          <Route path="/purchase-plan" element={<PurchasePlanningPage />} />
         </Routes>
       </main>
 

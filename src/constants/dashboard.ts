@@ -34,7 +34,7 @@ export const NAV_ITEMS = [
     label: "Purchase Plan",
     path: "/purchase-plan",
     icon: ShoppingCart,
-    enabled: false,
+    enabled: true,
   },
   {
     label: "Waste Alerts",
