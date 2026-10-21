@@ -1,4 +1,4 @@
-import { BarChart3, TrendingUp } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -77,16 +77,6 @@ function DemandForecast({
             {ingredient.unit} / week
           </span>
         </p>
-
-        <span
-          className={`mb-1 inline-flex items-center gap-1 text-xs font-medium ${
-            forecast.changePercent >= 0 ? "text-emerald-700" : "text-red-600"
-          }`}
-        >
-          <TrendingUp className="size-3.5" />
-          {forecast.changePercent > 0 ? "+" : ""}
-          {forecast.changePercent}%
-        </span>
       </div>
 
       <p className="mt-1 text-xs text-slate-400">

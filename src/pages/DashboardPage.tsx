@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import dayjs from "dayjs";
 
 import { AlertTriangle, BarChart3, Boxes, Clock3 } from "lucide-react";
 
@@ -13,21 +14,23 @@ import AIInsights from "@/components/dashboard/AIInsights";
 import { mockDashboard } from "@/data/mockDashboard";
 import { EXPIRY_WARNING_DAYS } from "@/constants/dashboard";
 
-import { getPurchaseRecommendations, getWeeklyDemand } from "@/utils/dashboard";
-import { useInventoryData } from "@/hooks/useInventoryData";
+import { useForecastData } from "@/hooks/useForecastData";
+
+import type {
+  IngredientForecast,
+  PurchaseRecommendation,
+} from "@/types/dashboard";
 
 function DashboardPage() {
-  const { ingredients } = useInventoryData();
+  const { ingredients, ingredientDemands, totalForecastPortions } =
+    useForecastData();
 
-  const { forecasts, insights } = mockDashboard;
+  const { insights } = mockDashboard;
 
   const [search, setSearch] = useState("");
+  const [selectedForecastId, setSelectedForecastId] = useState("");
 
-  const [selectedForecastId, setSelectedForecastId] = useState(
-    forecasts[0]?.ingredientId ?? "",
-  );
-
-  // Search only filters the inventory table.
+  // Filter inventory by ingredient name or category.
   const filteredIngredients = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -40,6 +43,7 @@ function DashboardPage() {
     );
   }, [ingredients, search]);
 
+  // Calculate dashboard statistics.
   const lowStockCount = useMemo(
     () =>
       ingredients.filter(
@@ -58,26 +62,56 @@ function DashboardPage() {
     [ingredients],
   );
 
-  const selectedForecast = forecasts.find(
-    (item) => item.ingredientId === selectedForecastId,
+  // Convert ingredient demand into the format
+  // expected by the existing DemandForecast component.
+  const forecasts: IngredientForecast[] = useMemo(
+    () =>
+      ingredientDemands.map((demand) => ({
+        ingredientId: demand.ingredientId,
+        changePercent: 0, // Placeholder: not calculated yet.
+        dailyDemand: demand.dailyDemand.map((day) => ({
+          day: dayjs(day.date).format("ddd"),
+          quantity: day.quantity,
+        })),
+      })),
+    [ingredientDemands],
   );
 
-  const selectedIngredient = ingredients.find(
-    (item) => item.id === selectedForecastId,
-  );
+  // Ensure a valid selection without updating state in an effect.
+  const activeForecastId = forecasts.some(
+    (forecast) => forecast.ingredientId === selectedForecastId,
+  )
+    ? selectedForecastId
+    : (forecasts[0]?.ingredientId ?? "");
 
-  const weeklyDemand = selectedForecast ? getWeeklyDemand(selectedForecast) : 0;
+  // Adapt forecasting results for the existing PurchasePlan.
+  const recommendations: PurchaseRecommendation[] = useMemo(() => {
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
 
-  const recommendations = useMemo(
-    () => getPurchaseRecommendations(ingredients, forecasts),
-    [ingredients, forecasts],
-  );
+    return ingredientDemands.flatMap((demand) => {
+      if (demand.recommendedOrder <= 0) return [];
+
+      const ingredient = ingredientMap.get(demand.ingredientId);
+
+      if (!ingredient) return [];
+
+      return [
+        {
+          ingredient,
+          quantity: demand.recommendedOrder,
+          estimatedCost: demand.estimatedCost,
+        },
+      ];
+    });
+  }, [ingredients, ingredientDemands]);
 
   return (
     <div className="mx-auto max-w-400 space-y-6">
       <DashboardHeader search={search} onSearchChange={setSearch} />
 
-      {/* KPI cards */}
+      {/* Summary statistics */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Total Ingredients"
@@ -97,8 +131,8 @@ function DashboardPage() {
 
         <StatCard
           title="7-Day Forecast"
-          value={Math.round(weeklyDemand).toLocaleString()}
-          description={`Expected ${selectedIngredient?.name ?? "ingredient"} demand (${selectedIngredient?.unit ?? "units"})`}
+          value={totalForecastPortions.toLocaleString()}
+          description="Expected menu portions sold"
           icon={BarChart3}
           tone="blue"
         />
@@ -112,7 +146,7 @@ function DashboardPage() {
         />
       </div>
 
-      {/* Main dashboard grid */}
+      {/* Dashboard content */}
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
         {/* Left column */}
         <div className="min-w-0 space-y-5">
@@ -126,7 +160,7 @@ function DashboardPage() {
           <DemandForecast
             ingredients={ingredients}
             forecasts={forecasts}
-            selectedId={selectedForecastId}
+            selectedId={activeForecastId}
             onSelectedIdChange={setSelectedForecastId}
           />
 

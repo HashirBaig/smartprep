@@ -5,6 +5,7 @@ import AppSidebar from "@/components/AppSidebar";
 
 import DashboardPage from "@/pages/DashboardPage";
 import InventoryPage from "@/pages/InventoryPage";
+import ForecastPage from "@/pages/ForecastPage";
 
 import "./App.css";
 
@@ -17,6 +18,7 @@ function App() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/inventory" element={<InventoryPage />} />
+          <Route path="/forecasts" element={<ForecastPage />} />
         </Routes>
       </main>
 

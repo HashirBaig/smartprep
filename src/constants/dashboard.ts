@@ -28,7 +28,7 @@ export const NAV_ITEMS = [
     label: "Forecasts",
     path: "/forecasts",
     icon: BarChart3,
-    enabled: false,
+    enabled: true,
   },
   {
     label: "Purchase Plan",
